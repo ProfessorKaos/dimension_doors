@@ -74,9 +74,10 @@ class Link:
             row_pin_nums=_get_int_tuple_env("DD_KEYPAD_ROWS", (5, 6, 13, 19)),
             column_pins_nums=_get_int_tuple_env("DD_KEYPAD_COLS", (26,20,26,12)),
             keys=[
-                ["A"],
-                ["B"],
-                ["C"],
+                ['1', '2', '3', 'A'],
+                ['4', '5', '6', 'B'],
+                ['7', '8', '9', 'C'],
+                ['*', '0', '#', 'D']
             ],
         )
 
