@@ -8,7 +8,6 @@ from dd_led import LED
 from lib.audio_player import AudioPlayer
 from lib.LCD1602 import LCD
 from lib.keypad import Keypad
-from lib.wifi import Wifi
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -58,26 +57,22 @@ def _get_optional_hex_int(name, default=None):
 
 class Link:
     def __init__(self):
-        self.wifi = Wifi()
         self.lights = LED(
-            sck_pin=_get_int_env("DD_TLC_SCK", 11),
-            mosi_pin=_get_int_env("DD_TLC_MOSI", 10),
-            np_pin=_get_int_env("DD_NEOPIXEL_PIN", 18),
+            np_pin=_get_int_env("DD_NEOPIXEL_PIN", 10),
             num_np=_get_int_env("DD_NEOPIXEL_COUNT", 150),
-            spi_bus=_get_int_env("DD_SPI_BUS", 0),
-            spi_device=_get_int_env("DD_SPI_DEVICE", 0),
         )
+        # self.lcd = None
         self.lcd = LCD(
-            i2c_bus=_get_int_env("DD_LCD_I2C_BUS", 1),
+            i2c_bus=_get_int_env("DD_LCD_I2C_BUS", 2),
             address=_get_optional_hex_int("DD_LCD_I2C_ADDR", None),
         )
         self.player = AudioPlayer(
             audio_dir=os.getenv("DD_AUDIO_DIR", str(BASE_DIR / "audio")),
-            volume=25,
+            volume=100,
         )
         self.keypad = Keypad(
-            row_pin_nums=_get_int_tuple_env("DD_KEYPAD_ROWS", (17, 27, 22)),
-            column_pins_nums=_get_int_tuple_env("DD_KEYPAD_COLS", (23,)),
+            row_pin_nums=_get_int_tuple_env("DD_KEYPAD_ROWS", (5, 6, 13, 19)),
+            column_pins_nums=_get_int_tuple_env("DD_KEYPAD_COLS", (26,20,26,12)),
             keys=[
                 ["A"],
                 ["B"],
@@ -85,13 +80,14 @@ class Link:
             ],
         )
 
-        self.apps = (self.wifi, self.lcd, self.lights, self.player, self.keypad)
+        self.apps = (self.lcd, self.lights, self.player, self.keypad)
         for app in self.apps:
-            app.D = self
+            if app:
+                app.D = self
 
 
 D = Link()
-wifi, lcd, lights, player, keypad = D.wifi, D.lcd, D.lights, D.player, D.keypad
+lcd, lights, player, keypad = D.lcd, D.lights, D.player, D.keypad
 
 
 def c_task(coro):
@@ -107,24 +103,27 @@ def start_mode(mode):
 
 
 def d(text, cl=True, y=0, x=0):
-    if cl:
-        lcd.clear()
-    return lcd.puts(text, y=y, x=x)
+    if lcd:
+        if cl:
+            lcd.clear()
+        return lcd.puts(text, y=y, x=x)
 
 
 async def default_screen(timer=1):
-    print(f"Displaying default screen in {timer} seconds")
-    await asyncio.sleep(timer)
-    lcd.clear()
-    d("The Dimension Doors", cl=False, y=0, x=0)
-    d("Experience", cl=False, y=1, x=5)
-    d("9 mins long", cl=False, y=2, x=4)
-    d("Press A Then get in", cl=False, y=3, x=0)
+    if lcd:
+        print(f"Displaying default screen in {timer} seconds")
+        await asyncio.sleep(timer)
+        lcd.clear()
+        d("The Dimension Doors", cl=False, y=0, x=0)
+        d("Experience", cl=False, y=1, x=5)
+        d("9 mins long", cl=False, y=2, x=4)
+        d("Press A Then get in", cl=False, y=3, x=0)
 
 
 async def cl(timer):
     await asyncio.sleep(timer)
-    lcd.clear()
+    if lcd:
+        lcd.clear()
 
 
 def wc(rgb, idx=None):
@@ -161,22 +160,23 @@ def _ms_to_ts(ms):
 
 
 async def countdown(duration):
-    start_time = ticks_ms()
-    lcd.clear()
-    d("Experience Underway", cl=False, y=0, x=0)
-    d("Please wait", cl=False, y=1, x=0)
-    d("Time left:", cl=False, y=2, x=0)
-    while True:
-        elapsed = ticks_diff(ticks_ms(), start_time)
-        remaining = max(0, duration - elapsed)
-        ts = _ms_to_ts(int(remaining))
-        d(f"{ts}", cl=False, y=3, x=0)
+    if lcd:
+        start_time = ticks_ms()
+        lcd.clear()
+        d("Experience Underway", cl=False, y=0, x=0)
+        d("Please wait", cl=False, y=1, x=0)
+        d("Time left:", cl=False, y=2, x=0)
+        while True:
+            elapsed = ticks_diff(ticks_ms(), start_time)
+            remaining = max(0, duration - elapsed)
+            ts = _ms_to_ts(int(remaining))
+            d(f"{ts}", cl=False, y=3, x=0)
 
-        if remaining <= 0:
-            d("Experience Over", y=0, x=0)
-            c_task(default_screen(20))
-            break
-        await asyncio.sleep(1)
+            if remaining <= 0:
+                d("Experience Over", y=0, x=0)
+                c_task(default_screen(20))
+                break
+            await asyncio.sleep(1)
 
 
 async def _handle_key_sequence_after_timeout(timeout_seconds=1.0):
@@ -190,7 +190,8 @@ async def _handle_key_sequence_after_timeout(timeout_seconds=1.0):
         print("Restarting controller process")
         d("Controller Restarting", y=0, x=0)
         await asyncio.sleep(2)
-        lcd.clear()
+        if lcd:
+            lcd.clear()
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     if typed == ["B", "A", "B", "A"]:
@@ -241,7 +242,6 @@ def _build_exec_ns():
     return {
         "asyncio": asyncio,
         "time": time,
-        "wifi": wifi,
         "lcd": lcd,
         "lights": lights,
         "player": player,
@@ -348,11 +348,11 @@ def play_exp(csv_file, start_at=0):
 async def main():
     c_task(wait_for_keypress())
 
-    if os.getenv("DD_AUTOSTART", "0") == "1":
-        play_exp(os.getenv("DD_EXPERIENCE_FILE", "dimension.csv"))
-    else:
-        c_task(default_screen())
-
+    # if os.getenv("DD_AUTOSTART", "0") == "1":
+    #     play_exp(os.getenv("DD_EXPERIENCE_FILE", "dimension.csv"))
+    # else:
+    #     c_task(default_screen())
+    play_exp(os.getenv("DD_EXPERIENCE_FILE", "dimension.csv"))
     while True:
         await asyncio.sleep(20)
 

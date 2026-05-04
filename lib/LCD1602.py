@@ -4,7 +4,7 @@ from smbus2 import SMBus, i2c_msg
 
 
 class LCD():
-    def __init__(self, scl_pin=9, sda_pin=8, freq=100000, i2c_bus=1, address=None):
+    def __init__(self, scl_pin=23, sda_pin=24, freq=100000, i2c_bus=1, address=None):
         self.D = None
 
         # board definition
