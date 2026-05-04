@@ -1,0 +1,11 @@
+[project]
+name = "dimension-doors"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "adafruit-circuitpython-neopixel-spi>=1.0.16",
+    "rpi-gpio>=0.7.1",
+    "smbus2>=0.6.1",
+]
