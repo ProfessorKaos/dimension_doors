@@ -44,7 +44,21 @@ class LCD():
                 return addr
             except OSError:
                 continue
-        raise RuntimeError("Cannot locate I2C LCD backpack (tried 0x27, 0x3F, 0x20, 0x26)")
+        print("Cannot locate I2C LCD backpack (tried 0x27, 0x3F, 0x20, 0x26); using dummy LCD bus")
+
+        def _noop_write_byte(*args, **kwargs):
+            return None
+
+        def _noop_i2c_rdwr(*args, **kwargs):
+            return None
+
+        def _noop_close(*args, **kwargs):
+            return None
+
+        self.bus.write_byte = _noop_write_byte
+        self.bus.i2c_rdwr = _noop_i2c_rdwr
+        self.bus.close = _noop_close
+        return 0x27
 
     def queue(self, dat):
         '''

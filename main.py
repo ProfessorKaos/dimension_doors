@@ -61,7 +61,6 @@ class Link:
             np_pin=_get_int_env("DD_NEOPIXEL_PIN", 10),
             num_np=_get_int_env("DD_NEOPIXEL_COUNT", 150),
         )
-        # self.lcd = None
         self.lcd = LCD(
             i2c_bus=_get_int_env("DD_LCD_I2C_BUS", 2),
             address=_get_optional_hex_int("DD_LCD_I2C_ADDR", None),
