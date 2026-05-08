@@ -187,6 +187,9 @@ class LED:
         self.duty = 0.4
         self.duration = 600000
         self.remaining_duration = 0
+        self.period = 1.0 / self.freq
+        self.on_time = self.period * self.duty
+        self.off_time = self.period * (1 - self.duty)
 
         self.rgb = (255, 0, 0)
         self.white = (255, 255, 255)
@@ -213,10 +216,6 @@ class LED:
             "end": self.num_np,
         }
 
-        self._flick_freq = max(0.01, float(self.freq))
-        self._flick_duty = max(0.01, min(0.99, float(self.duty)))
-        self._flick_color = self.rgb
-        self._flick_walls = tuple(range(4))
         self._flick_thread = None
         self._flick_stop = threading.Event()
         self._lock = threading.Lock()
@@ -237,149 +236,46 @@ class LED:
         return tuple(walls_int)
 
     def _flick_loop(self):
+        self.update_flick()
         while not self._flick_stop.is_set():
-            with self._lock:
-                freq = max(0.01, float(self._flick_freq))
-                duty = max(0.01, min(0.99, float(self._flick_duty)))
-                walls = self._flick_walls
-                color = self._flick_color
-
-            period = 1.0 / freq
-            on_time = period * duty
-            off_time = max(0.0, period - on_time)
-
-            for wall in walls:
-                self.walls.setLED(wall, color)
-            self.walls.write()
             self.walls.allOn()
-
-            if self._flick_stop.wait(timeout=on_time):
+            if self._flick_stop.wait(timeout=self.on_time):
                 break
-
             self.walls.allOff()
-
-            if self._flick_stop.wait(timeout=off_time):
+            if self._flick_stop.wait(timeout=self.off_time):
                 break
 
-    def set_channels(self, specs=None):
-        specs = specs or []
-        if isinstance(specs, dict):
-            specs = [specs]
-        if not specs:
-            specs = [{}]
-        if len(specs) > 1 and not self._warned_multi_spec:
-            print("Only one flicker spec is supported in OE mode. Extra specs are ignored.")
-            self._warned_multi_spec = True
 
-        spec = specs[0] if isinstance(specs[0], dict) else {}
-        defaults = {
-            "freq": self.freq,
-            "duty": self.duty,
-            "phase": 0.0,
-            "color": self.rgb,
-            "walls": tuple(range(4)),
-        }
-        merged = defaults.copy()
-        merged.update(spec)
-        if "colour" in merged and "color" not in spec:
-            merged["color"] = merged["colour"]
-        if isinstance(merged["color"], int):
-            merged["color"] = self.hsv(h=merged["color"], s=self.sat, v=self.bright)
-
-        walls_arg = merged.get("walls", tuple(range(4)))
-        if walls_arg is None:
-            walls = tuple(range(4))
-        else:
-            walls = self.setWalls(walls_arg)
-            if not walls:
-                walls = tuple(range(4))
-
-        with self._lock:
-            self._flick_freq = max(0.01, float(merged["freq"]))
-            self._flick_duty = max(0.01, min(0.99, float(merged["duty"])))
-            self._flick_color = merged["color"]
-            self._flick_walls = walls
-
-        self.freq = self._flick_freq
-        self.duty = self._flick_duty
-        self.rgb = self._flick_color
-
-    def update_channel_freq(self, ch_idx=0, freq=0):
-        if ch_idx != 0:
-            print(f"Error: Channel index {ch_idx} out of range")
-            return
-        with self._lock:
-            self._flick_freq = max(0.01, float(freq))
-        self.freq = self._flick_freq
-
-    def update_channel_duty(self, ch_idx=0, duty=0):
-        if ch_idx != 0:
-            print(f"Error: Channel index {ch_idx} out of range")
-            return
-        with self._lock:
-            self._flick_duty = max(0.01, min(0.99, float(duty)))
-        self.duty = self._flick_duty
-
-    def update_channel_color(self, ch_idx=0, color=None):
-        if ch_idx != 0:
-            print(f"Error: Channel index {ch_idx} out of range")
-            return
-        if color is None:
-            return
-        if isinstance(color, int):
-            color = self.hsv(h=color, s=self.sat, v=self.bright)
-        with self._lock:
-            self._flick_color = color
-            walls = self._flick_walls
-        self.rgb = color
-        for wall in walls:
-            self.walls.setLED(wall, color)
-        self.walls.write()
-
-    def update_channel_phase(self, ch_idx=0, phase_deg=0):
-        if ch_idx != 0:
-            print(f"Error: Channel index {ch_idx} out of range")
-            return
-        return
-
-    def set_tick_rate(self, rate):
-        return
-
-    async def accel_rotate(self, dur=10, s_freq=5.0, e_freq=15.0, hue=None, sat=1.0):
-        spec = {"freq": s_freq}
-        if hue is not None:
-            spec["color"] = self.hsv(h=hue, s=sat, v=self.bright)
-        self.set_channels(spec)
-        self.start_flick()
-
+    async def flick_transition(self, dur=10, s_freq=5.0, e_freq=15.0):
         start_time = ticks_ms()
         dur_ms = int(dur * 1000)
         end_time = start_time + dur_ms
-
-        if s_freq == e_freq:
-            await asyncio.sleep(dur)
-            self.stop_flick()
-            return
         while ticks_ms() < end_time:
             elapsed = ticks_diff(ticks_ms(), start_time)
             freq = s_freq + (e_freq - s_freq) * (elapsed / dur_ms)
-            self.update_channel_freq(freq=freq)
-            await asyncio.sleep(0.05)
-        self.stop_flick()
+            self.update_flick(freq=freq)
+            await asyncio.sleep(0.1)
+
 
     def start_flick(self, freq=None):
+        if freq is not None:
+            self.update_flick(freq=freq)
         if self._flick_thread and self._flick_thread.is_alive():
             return
-        with self._lock:
-            walls = self._flick_walls
-            color = self._flick_color
-        for wall in walls:
-            self.walls.setLED(wall, color)
-        self.walls.write()
         self.walls.allOff()
         self._flick_stop.clear()
         self._flick_thread = threading.Thread(target=self._flick_loop, daemon=True)
         self._flick_thread.start()
+
+    def update_flick(self, freq=None, duty=None):
+        with self._lock:
+            if freq is not None:
+                self.freq = max(0.01, float(freq))
+            if duty is not None:
+                self.duty = max(0.01, min(0.99, float(duty)))
+            self.period = 1.0 / self.freq
+            self.on_time = self.period * self.duty
+            self.off_time = self.period * (1 - self.duty)
 
     def stop_flick(self):
         self._flick_stop.set()
