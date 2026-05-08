@@ -16,6 +16,8 @@ BASE_DIR = Path(__file__).resolve().parent
 def ticks_ms():
     return int(time.monotonic() * 1000)
 
+def ticks_us():
+    return int(time.monotonic())
 
 def ticks_diff(now_ms, then_ms):
     return now_ms - then_ms
@@ -286,13 +288,19 @@ async def run_exp(csv_file, start_at=0):
         print(f"Parsed header - Track ID: {track_id}, Duration (ms): {duration_ms}")
         await asyncio.sleep(5)
 
+        if isinstance(start_at, str):
+            start_at = _ts_to_ms(start_at)
+        elif isinstance(start_at, (int, float)):
+            start_at = int(start_at)
+        print(f"Starting experience at {_ms_to_ts(start_at)}")
+
         lights.duration = duration_ms
         player.play_track(track_id, start_ms=int(start_at))
         countdown_task = c_task(countdown(lights.duration - int(start_at)))
 
         exec_ns = _build_exec_ns()
 
-        start_ms = ticks_ms() + int(start_at)
+        start_ms = ticks_ms() - int(start_at)
         for raw_line in lines[1:]:
             line = raw_line.strip()
             if not line or line.startswith("#"):
@@ -313,10 +321,10 @@ async def run_exp(csv_file, start_at=0):
                 await asyncio.sleep(max(0.001, min(wait_ms / 1000.0, 0.05)))
 
             try:
-                start = ticks_ms()
+                start = ticks_us()
                 exec(call.strip(), exec_ns, exec_ns)
-                end = ticks_ms()
-                print(f"Executed:{ts} , {call.strip()} in {ticks_diff(end, start)} ms")
+                end = ticks_us()
+                print(f"Executed:{ts} , {call.strip()} in {ticks_diff(end, start)} us")
             except Exception as e:
                 print("Exec failed:", e, "Command:", call)
             await asyncio.sleep(0)
