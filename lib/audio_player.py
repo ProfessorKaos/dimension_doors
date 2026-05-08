@@ -58,12 +58,15 @@ class AudioPlayer:
             except Exception:
                 pass
 
-    def _spawn(self, track_path):
+    def _spawn(self, track_path, skip_frames=0):
         if not self._mpg123:
             raise RuntimeError("mpg123 is not installed. Install it before running this app.")
 
         gain = int(500 + (self._volume / 30.0) * 3000)
-        cmd = [self._mpg123, "-q", "-f", str(gain), str(track_path)]
+        cmd = [self._mpg123, "-q", "-f", str(gain)]
+        if skip_frames > 0:
+            cmd += ["-k", str(skip_frames)]
+        cmd.append(str(track_path))
         self._proc = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
@@ -71,14 +74,16 @@ class AudioPlayer:
             start_new_session=True,
         )
 
-    def play_track(self, track_id=1):
+    def play_track(self, track_id=1, start_ms=0):
         self.stop()
         track = self._resolve_track_file(track_id)
         if not track:
             print(f"Audio track {track_id} not found in {self.audio_dir.resolve()}")
             return
         self._set_system_volume()
-        self._spawn(track)
+        # mpg123 seeks by MPEG frames; assumes 44100 Hz / 1152 samples per frame (~38.28 fps)
+        skip_frames = int(start_ms * 44100 // 1152000) if start_ms > 0 else 0
+        self._spawn(track, skip_frames=skip_frames)
 
     def stop(self):
         if not self._proc:

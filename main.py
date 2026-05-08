@@ -287,8 +287,8 @@ async def run_exp(csv_file, start_at=0):
         await asyncio.sleep(5)
 
         lights.duration = duration_ms
-        player.play_track(track_id)
-        countdown_task = c_task(countdown(lights.duration))
+        player.play_track(track_id, start_ms=int(start_at))
+        countdown_task = c_task(countdown(lights.duration - int(start_at)))
 
         exec_ns = _build_exec_ns()
 
@@ -352,7 +352,8 @@ async def main():
     #     play_exp(os.getenv("DD_EXPERIENCE_FILE", "dimension.csv"))
     # else:
     #     c_task(default_screen())
-    play_exp(os.getenv("DD_EXPERIENCE_FILE", "dimension.csv"))
+    start = _ts_to_ms("01:20:00")
+    play_exp(os.getenv("DD_EXPERIENCE_FILE", "dimension.csv"), start_at=start)
     while True:
         await asyncio.sleep(20)
 
