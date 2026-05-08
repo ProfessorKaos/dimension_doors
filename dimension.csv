@@ -1,4 +1,4 @@
-DD_Voice_v4.mp3,08:48:000
+2,08:48:000
 # timestamp,python command,
 00:00:840,start_mode(lights.wheel(dur=21)),
 00:22:945,pulse(length=14),
