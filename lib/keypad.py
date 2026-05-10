@@ -1,4 +1,6 @@
 import asyncio
+import argparse
+import sys
 import time
 
 try:
@@ -8,6 +10,11 @@ except Exception:  # pragma: no cover - allows local development without GPIO
 
 __version__ = '2.0.0'
 __author__ = 'Teeraphat Kullanankanjana'
+DEFAULT_DISCOVERY_PINS = [6, 13, 19, 26, 12, 16, 20, 21]
+
+#These were the pins discovered by the below test app
+row_pin_nums     = [6, 12, 19, 13]
+column_pins_nums = [20, 26, 21, 16]
 
 
 class KeypadException(Exception):
@@ -16,7 +23,7 @@ class KeypadException(Exception):
 
 
 class Keypad:
-    DEBOUNCE_MS = 50
+    DEBOUNCE_MS = 200
 
     def __init__(self, row_pin_nums, column_pins_nums, keys):
         """
@@ -134,3 +141,227 @@ class Keypad:
             GPIO.cleanup(pins)
         except Exception:
             GPIO.cleanup()
+
+
+def _parse_pin_list(pins_csv):
+    pins = []
+    for part in pins_csv.split(','):
+        token = part.strip()
+        if not token:
+            continue
+        pins.append(int(token))
+    if len(set(pins)) != len(pins):
+        raise ValueError("Pins must be unique.")
+    return pins
+
+
+def _prepare_all_inputs(pins):
+    for pin in pins:
+        GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+
+def _detect_pressed_pair(candidate_pins):
+    """
+    Probe all candidate pins and return one undirected pair (pin_a, pin_b)
+    that appears electrically connected by a held keypress.
+    """
+    hits = {}
+
+    for src in candidate_pins:
+        _prepare_all_inputs(candidate_pins)
+        GPIO.setup(src, GPIO.OUT, initial=GPIO.HIGH)
+        time.sleep(0.0002)
+
+        targets = []
+        for dst in candidate_pins:
+            if dst == src:
+                continue
+            if GPIO.input(dst):
+                targets.append(dst)
+
+        GPIO.setup(src, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+        if len(targets) == 1:
+            pair = tuple(sorted((src, targets[0])))
+            hits[pair] = hits.get(pair, 0) + 1
+
+    if not hits:
+        return None
+
+    # Highest vote wins; usually a valid pair is seen from both directions.
+    return max(hits.items(), key=lambda item: item[1])[0]
+
+
+def _wait_for_new_pair(candidate_pins, seen_pairs):
+    while True:
+        pair = _detect_pressed_pair(candidate_pins)
+        if pair is None:
+            time.sleep(0.03)
+            continue
+        if pair in seen_pairs:
+            print(f"  Detected known pair {pair}. Please press a different key.")
+            while _detect_pressed_pair(candidate_pins) is not None:
+                time.sleep(0.03)
+            continue
+
+        while _detect_pressed_pair(candidate_pins) is not None:
+            time.sleep(0.03)
+        return pair
+
+
+def _infer_row_col_sets(pairs, candidate_pins, expected_rows, expected_cols):
+    adjacency = {pin: set() for pin in candidate_pins}
+    for a, b in pairs:
+        adjacency[a].add(b)
+        adjacency[b].add(a)
+
+    colors = {}
+    for pin in candidate_pins:
+        if pin not in colors and adjacency[pin]:
+            colors[pin] = 0
+            stack = [pin]
+            while stack:
+                node = stack.pop()
+                for nei in adjacency[node]:
+                    if nei not in colors:
+                        colors[nei] = 1 - colors[node]
+                        stack.append(nei)
+                    elif colors[nei] == colors[node]:
+                        raise RuntimeError("Observed pairs are not bipartite. Check wiring and retry.")
+
+    group0 = sorted([pin for pin, color in colors.items() if color == 0])
+    group1 = sorted([pin for pin, color in colors.items() if color == 1])
+
+    if len(group0) == expected_rows and len(group1) == expected_cols:
+        return group0, group1
+    if len(group1) == expected_rows and len(group0) == expected_cols:
+        return group1, group0
+
+    raise RuntimeError(
+        "Could not match inferred pin groups to expected rows/columns. "
+        f"Inferred groups: {group0} and {group1}."
+    )
+
+
+def _pair_to_row_col(pair, row_set, col_set):
+    a, b = pair
+    if a in row_set and b in col_set:
+        return a, b
+    if b in row_set and a in col_set:
+        return b, a
+    return None
+
+
+def _wait_for_pair_in_sets(candidate_pins, row_set, col_set):
+    while True:
+        pair = _detect_pressed_pair(candidate_pins)
+        if pair is None:
+            time.sleep(0.03)
+            continue
+
+        mapped = _pair_to_row_col(pair, row_set, col_set)
+        while _detect_pressed_pair(candidate_pins) is not None:
+            time.sleep(0.03)
+
+        if mapped is None:
+            print(f"  Ignored pair {pair}; not between inferred row/column sets.")
+            continue
+        return mapped
+
+
+def _run_mapping_cli(args):
+    if not GPIO:
+        print("RPi.GPIO is not available on this system.")
+        return 1
+
+    expected_total = args.rows + args.cols
+    if len(args.pins) != expected_total:
+        print(
+            f"Expected exactly {expected_total} pins for a {args.rows}x{args.cols} keypad, "
+            f"but got {len(args.pins)}: {args.pins}"
+        )
+        return 1
+
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BCM)
+    _prepare_all_inputs(args.pins)
+
+    print("\\n=== Keypad Pin Discovery ===")
+    print(f"Candidate GPIO pins (BCM): {args.pins}")
+    print("Press and hold one key at a time, then release before next key.")
+    print("Press Ctrl+C anytime to stop.\\n")
+
+    target_samples = args.rows * args.cols
+    seen_pairs = set()
+
+    try:
+        while len(seen_pairs) < target_samples:
+            print(f"[{len(seen_pairs) + 1}/{target_samples}] Press a NEW key...")
+            pair = _wait_for_new_pair(args.pins, seen_pairs)
+            seen_pairs.add(pair)
+            print(f"  Captured pair: {pair}\\n")
+
+        row_pins_set, col_pins_set = _infer_row_col_sets(
+            seen_pairs,
+            args.pins,
+            expected_rows=args.rows,
+            expected_cols=args.cols,
+        )
+
+        print("Inferred pin groups:")
+        print(f"  Row-group candidates: {row_pins_set}")
+        print(f"  Col-group candidates: {col_pins_set}\\n")
+
+        print("=== Ordering Calibration ===")
+        print("Now we determine order (top->bottom rows, left->right cols).")
+        print("Follow prompts using your keypad's physical layout.\\n")
+
+        row_pins = [None] * args.rows
+        for r in range(args.rows):
+            print(f"Press key at row {r + 1}, column 1 (left-most)...")
+            row_pin, _ = _wait_for_pair_in_sets(args.pins, set(row_pins_set), set(col_pins_set))
+            row_pins[r] = row_pin
+            print(f"  Row {r + 1} => GPIO {row_pin}\\n")
+
+        col_pins = [None] * args.cols
+        for c in range(args.cols):
+            print(f"Press key at row 1, column {c + 1} (top row)...")
+            _, col_pin = _wait_for_pair_in_sets(args.pins, set(row_pins_set), set(col_pins_set))
+            col_pins[c] = col_pin
+            print(f"  Col {c + 1} => GPIO {col_pin}\\n")
+
+        if len(set(row_pins)) != len(row_pins) or len(set(col_pins)) != len(col_pins):
+            print("Calibration captured duplicate row/column pins. Re-run and press exact requested keys.")
+            return 1
+
+        print("=== Final Mapping ===")
+        print(f"row_pin_nums     = {row_pins}")
+        print(f"column_pins_nums = {col_pins}")
+
+        print("\\nUse these values in your keypad setup.")
+        return 0
+
+    except KeyboardInterrupt:
+        print("\\nStopped by user.")
+        return 0
+    finally:
+        try:
+            GPIO.cleanup(args.pins)
+        except Exception:
+            GPIO.cleanup()
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Interactive GPIO keypad pin mapper (row/column discovery + ordering).'
+    )
+    parser.add_argument(
+        '--pins',
+        type=_parse_pin_list,
+        default=DEFAULT_DISCOVERY_PINS,
+        help='Comma-separated BCM pins connected to keypad (rows+cols). '
+             f'Default: {DEFAULT_DISCOVERY_PINS}',
+    )
+    parser.add_argument('--rows', type=int, default=4, help='Number of keypad rows (default: 4).')
+    parser.add_argument('--cols', type=int, default=4, help='Number of keypad columns (default: 4).')
+    sys.exit(_run_mapping_cli(parser.parse_args()))

@@ -57,6 +57,9 @@ def _get_optional_hex_int(name, default=None):
         return default
 
 
+row_pin_nums     = [6, 12, 19, 13]
+column_pins_nums = [20, 26, 21, 16]
+
 class Link:
     def __init__(self):
         self.lights = LED(
@@ -72,8 +75,8 @@ class Link:
             volume=100,
         )
         self.keypad = Keypad(
-            row_pin_nums=_get_int_tuple_env("DD_KEYPAD_ROWS", (5, 6, 13, 19)),
-            column_pins_nums=_get_int_tuple_env("DD_KEYPAD_COLS", (26,20,26,12)),
+            row_pin_nums=_get_int_tuple_env("DD_KEYPAD_ROWS", tuple(row_pin_nums)),
+            column_pins_nums=_get_int_tuple_env("DD_KEYPAD_COLS", tuple(column_pins_nums)),
             keys=[
                 ['1', '2', '3', 'A'],
                 ['4', '5', '6', 'B'],
