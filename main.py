@@ -364,7 +364,7 @@ async def main():
     # else:
     #     c_task(default_screen())
     start = _ts_to_ms("01:20:00")
-    play_exp(os.getenv("DD_EXPERIENCE_FILE", "dimension.csv"))#, start_at=start)
+    play_exp(os.getenv("DD_EXPERIENCE_FILE", "dimension.csv"), start_at=start)
     while True:
         await asyncio.sleep(20)
 

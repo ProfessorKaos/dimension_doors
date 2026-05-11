@@ -422,7 +422,6 @@ if __name__ == "__main__":
     lights.led((0, 0, 0))
 
     async def main():
-        await lights.string(5)
-        # lights.setColour((255, 0, 0), walls="back")
+        lights.setColour((0, 255, 0))
 
     asyncio.run(main())

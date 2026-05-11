@@ -23,7 +23,7 @@ class KeypadException(Exception):
 
 
 class Keypad:
-    DEBOUNCE_MS = 200
+    DEBOUNCE_MS = 500
 
     def __init__(self, row_pin_nums, column_pins_nums, keys):
         """
@@ -55,6 +55,7 @@ class Keypad:
         self.column_pins = list(column_pins_nums)
         self.keys = keys
         self._last_read_ms = 0
+        self._key_latched = False
         self.typed_keys = []
 
         if GPIO:
@@ -99,6 +100,11 @@ class Keypad:
 
         return result
 
+    def _any_row_active(self):
+        if not GPIO:
+            return False
+        return any(GPIO.input(row_pin) for row_pin in self.row_pins)
+
     def read_keypad(self):
         """
         Return the key that was pressed since the last call, or None.
@@ -112,6 +118,14 @@ class Keypad:
         if not GPIO:
             return None
 
+        if not self._any_row_active():
+            # Re-arm once every key is fully released.
+            self._key_latched = False
+            return None
+
+        if self._key_latched:
+            return None
+
         now_ms = int(time.monotonic() * 1000)
         if (now_ms - self._last_read_ms) < self.DEBOUNCE_MS:
             return None
@@ -121,6 +135,7 @@ class Keypad:
                 key = self._scan_column(row_idx)
                 if key is not None:
                     self._last_read_ms = now_ms
+                    self._key_latched = True
                     return key
         return None
 
@@ -128,7 +143,7 @@ class Keypad:
         while True:
             key = self.read_keypad()
             if key is not None:
-                while self.read_keypad() is not None:
+                while self._any_row_active():
                     await asyncio.sleep(0.02)
                 return key
             await asyncio.sleep(0.01)
