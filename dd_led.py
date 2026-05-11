@@ -415,29 +415,38 @@ class LED:
             end = self.np_axis.get(end, self.num_np)
         end = end or self.num_np
         print(f"End is {end}")
-        total = max(1, (end - start))
-        interval = int(dur * 1000 / total)
+        num_px = max(1, (end - start))
+        write_time = 50 / 1000 # num milliseconds required to write to strip
+        num_writes = dur  / (write_time * 2)
+        led_jump = int(num_px / num_writes)
         if isinstance(rgb, int):
             rgb = self.hsv(h=rgb, s=s, v=v)
-        for i in range(start, end):
-            self.np[i] = rgb
+
+        print(f"Updating {num_px} LEDs with jump {led_jump} over {dur} seconds (estimated {num_writes} writes)")
+        for i in range(start, end, led_jump):
+            start = ticks_ms()
+            for j in range(i, min(i + led_jump, end)):
+                self.np[j] = rgb
             self.np.write()
-            await asyncio.sleep(max(0.001, interval / 1000.0))
+            end = ticks_ms()
+            await asyncio.sleep(write_time)
+
+            
 
 
 if __name__ == "__main__":
-    # lights = LED(num_np=100)
-    # print("leds initialized")
-    # lights.led((0, 0, 0))
+    lights = LED(num_np=700)
+    print("leds initialized")
+    lights.led((0, 0, 0))
 
     async def main():
-        for i in range(100,800,50):
-            print(f"Testing with {i} LEDs")
-            lights = LED(num_np=i)
-            lights.led(1)
-            time.sleep(1)
-            lights.led((0, 0, 0))
+        # for i in range(100,800,50):
+        #     print(f"Testing with {i} LEDs")
+        #     lights = LED(num_np=i)
+        #     lights.led(1)
+        #     time.sleep(1)
+        #     lights.led((0, 0, 0))
 
-        # await lights.string(1)
+        await lights.string(0,dur=3)
 
     asyncio.run(main())
