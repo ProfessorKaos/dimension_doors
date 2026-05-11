@@ -6,10 +6,9 @@ import time
 from lib.pca9685 import PCA9685
 
 
-import board
 from smbus2 import SMBus
 import RPi.GPIO as GPIO
-import neopixel_spi
+from rpi_ws281x import Color, PixelStrip, ws
 
 
 def ticks_ms():
@@ -23,13 +22,18 @@ def ticks_diff(now_ms, then_ms):
 class _NeoPixelAdapter:
     def __init__(self, pin, count, brightness=255):
         self.count = int(count)
-        self._strip = neopixel_spi.NeoPixel_SPI(
-            board.SPI(),
-            self.count,
-            brightness=max(0.0, min(1.0, brightness / 255.0)),
-            auto_write=False,
-            pixel_order=neopixel_spi.GRB,
+        self._buffer = [(0, 0, 0)] * self.count
+        self._strip = PixelStrip(
+            num=self.count,
+            pin=int(pin),
+            freq_hz=800000,
+            dma=10,
+            invert=False,
+            brightness=max(0, min(255, int(brightness))),
+            channel=0,
+            strip_type=ws.WS2811_STRIP_GRB,
         )
+        self._strip.begin()
 
     @staticmethod
     def _clamp_rgb(rgb):
@@ -43,12 +47,16 @@ class _NeoPixelAdapter:
         idx = int(idx)
         if idx < 0 or idx >= self.count:
             return
-        self._strip[idx] = self._clamp_rgb(rgb)
+        self._buffer[idx] = self._clamp_rgb(rgb)
 
     def fill(self, rgb):
-        self._strip.fill(self._clamp_rgb(rgb))
+        clamped = self._clamp_rgb(rgb)
+        for i in range(self.count):
+            self._buffer[i] = clamped
 
     def write(self):
+        for i, (r, g, b) in enumerate(self._buffer):
+            self._strip.setPixelColor(i, Color(r, g, b))
         self._strip.show()
 
 
