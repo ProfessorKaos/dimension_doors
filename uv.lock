@@ -9,6 +9,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "rpi-gpio" },
     { name = "rpi-ws281x" },
+    { name = "rplcd" },
     { name = "smbus2" },
 ]
 
@@ -16,6 +17,7 @@ dependencies = [
 requires-dist = [
     { name = "rpi-gpio", specifier = ">=0.7.1" },
     { name = "rpi-ws281x", specifier = ">=5.0.0" },
+    { name = "rplcd", specifier = ">=1.4.0" },
     { name = "smbus2", specifier = ">=0.6.1" },
 ]
 
@@ -30,6 +32,15 @@ name = "rpi-ws281x"
 version = "5.0.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/c0/1e/642208a685c5e96d38323f42c75d9b24f95e2d1b8390dd104e04a712f29e/rpi_ws281x-5.0.0.tar.gz", hash = "sha256:00ce6db771436b778d0930245cf8ea2aae11008cc5fd67d57789c5422af3ee55", size = 64519, upload-time = "2023-05-16T12:04:22.463Z" }
+
+[[package]]
+name = "rplcd"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/af/64/178ba17c8c44fa7816bab0a9c2172174a21574fee860e5b53a4939c9bd44/rplcd-1.4.0.tar.gz", hash = "sha256:265d6a54e4ed8b1615dbd6b33c6f20ff671c656148cab311ae1b6fa37080095a", size = 36450, upload-time = "2025-03-29T22:44:57.996Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/f5/f3bc1ed33b44c360ca2aceccec4513ee3e2620d23eab32ccb04ab5f51cb9/rplcd-1.4.0-py3-none-any.whl", hash = "sha256:cea57fa96130bced88f6001acdb6169538c29409b2e3bb344c2c30cbb1cb192c", size = 48210, upload-time = "2025-03-29T22:44:56.457Z" },
+]
 
 [[package]]
 name = "smbus2"

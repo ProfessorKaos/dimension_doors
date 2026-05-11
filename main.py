@@ -107,10 +107,8 @@ def start_mode(mode):
     return lights.mode
 
 
-def d(text, cl=True, y=0, x=0):
+def d(text, y=0, x=0):
     if lcd:
-        if cl:
-            lcd.clear()
         return lcd.puts(text, y=y, x=x)
 
 
@@ -119,10 +117,10 @@ async def default_screen(timer=1):
         print(f"Displaying default screen in {timer} seconds")
         await asyncio.sleep(timer)
         lcd.clear()
-        d("The Dimension Doors", cl=False, y=0, x=0)
-        d("Experience", cl=False, y=1, x=5)
-        d("9 mins long", cl=False, y=2, x=4)
-        d("Press A Then get in", cl=False, y=3, x=0)
+        d("The Dimension Doors", y=0, x=0)
+        d("Experience", y=1, x=5)
+        d("9 mins long", y=2, x=4)
+        d("Press A Then get in", y=3, x=0)
 
 
 async def cl(timer):
@@ -164,22 +162,29 @@ def _ms_to_ts(ms):
     return f"{mm:02d}:{ss:02d}"
 
 
+def d_countdown():
+    lcd.clear()
+    d("Experience Underway", y=0, x=0)
+    d("Please wait", y=1, x=0)
+    d("Time left:", y=2, x=0)
+
+countdown_on = False
 async def countdown(duration):
+    global countdown_on
+    countdown_on = True
     if lcd:
         start_time = ticks_ms()
-        lcd.clear()
-        d("Experience Underway", cl=False, y=0, x=0)
-        d("Please wait", cl=False, y=1, x=0)
-        d("Time left:", cl=False, y=2, x=0)
+        d_countdown()
         while True:
             elapsed = ticks_diff(ticks_ms(), start_time)
             remaining = max(0, duration - elapsed)
             ts = _ms_to_ts(int(remaining))
-            d(f"{ts}", cl=False, y=3, x=0)
+            d(f"{ts}", y=3, x=0)
 
             if remaining <= 0:
                 d("Experience Over", y=0, x=0)
                 c_task(default_screen(20))
+                countdown_on = False
                 break
             await asyncio.sleep(1)
 
@@ -212,6 +217,9 @@ async def _handle_key_sequence_after_timeout(timeout_seconds=1.0):
         print("Key A was pressed")
         if _experience_task and not _experience_task.done():
             d("Experience active", y=0, x=0)
+            d("Please wait until the current experience ", y=2, x=0)
+            await asyncio.sleep(2)
+            d_countdown()
         else:
             d("Doors open. GET IN!", y=0, x=0)
             play_exp("dimension.csv")
@@ -219,11 +227,21 @@ async def _handle_key_sequence_after_timeout(timeout_seconds=1.0):
     elif typed == ["B"]:
         print("Key B was pressed")
         d("Key B was pressed!", y=0, x=0)
-        c_task(default_screen(5))
+        d("Sorry this doesn't do anything yet", y=3, x=0)
+        await asyncio.sleep(2)
+        if countdown_on:
+            d_countdown()
+        else:
+            c_task(default_screen(1))
     elif typed == ["C"]:
         print("Key C was pressed")
         d("Key C was pressed!", y=0, x=0)
-        c_task(default_screen(5))
+        d("Sorry this doesn't do anything yet", y=3, x=0)
+        await asyncio.sleep(2)
+        if countdown_on:
+            d_countdown()
+        else:
+            c_task(default_screen(1))
     else:
         print(f"Typed keys: {typed} did not match any special sequence.")
 
@@ -237,7 +255,7 @@ async def wait_for_keypress():
             if _key_sequence_task:
                 _key_sequence_task.cancel()
             _key_sequence_task = c_task(_handle_key_sequence_after_timeout(1.0))
-            d("You typed: " + "".join(keypad.typed_keys), cl=False, y=3, x=0)
+            d("You typed: " + "".join(keypad.typed_keys), y=3, x=0)
         except Exception as e:
             print("Error in wait_for_keypress:", e)
             await asyncio.sleep(0.2)
@@ -358,13 +376,7 @@ def play_exp(csv_file, start_at=0):
 
 async def main():
     c_task(wait_for_keypress())
-
-    # if os.getenv("DD_AUTOSTART", "0") == "1":
-    #     play_exp(os.getenv("DD_EXPERIENCE_FILE", "dimension.csv"))
-    # else:
-    #     c_task(default_screen())
-    start = _ts_to_ms("01:20:00")
-    play_exp(os.getenv("DD_EXPERIENCE_FILE", "dimension.csv"), start_at=start)
+    await default_screen(0)
     while True:
         await asyncio.sleep(20)
 
