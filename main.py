@@ -210,7 +210,7 @@ async def _handle_key_sequence_after_timeout(timeout_seconds=1.0):
         if _experience_task:
             _experience_task.cancel()
             _experience_task = None
-        c_task(cl(2))
+        c_task(default_screen(2))
         return
 
     if typed == ["A"]:
