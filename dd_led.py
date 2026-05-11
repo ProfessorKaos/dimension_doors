@@ -159,7 +159,7 @@ class LED:
     def __init__(
         self,
         np_pin=10,
-        num_np=150,
+        num_np=500,
         i2c_bus=1,
         pca_address=0x40,
         oe_pin=4,
@@ -210,9 +210,9 @@ class LED:
         }
 
         self.np_axis = {
-            "start": 30,
-            "x": 87,
-            "y": 118,
+            "start": 1,
+            "x": 400,
+            "y": 600,
             "end": self.num_np,
         }
 
@@ -406,6 +406,7 @@ class LED:
         if isinstance(end, str):
             end = self.np_axis.get(end, self.num_np)
         end = end or self.num_np
+        print(f"End is {end}")
         total = max(1, (end - start))
         interval = int(dur * 1000 / total)
         if isinstance(rgb, int):
@@ -417,11 +418,18 @@ class LED:
 
 
 if __name__ == "__main__":
-    lights = LED()
-    print("leds initialized")
-    lights.led((0, 0, 0))
+    # lights = LED(num_np=100)
+    # print("leds initialized")
+    # lights.led((0, 0, 0))
 
     async def main():
-        lights.setColour((0, 255, 0))
+        for i in range(100,800,50):
+            print(f"Testing with {i} LEDs")
+            lights = LED(num_np=i)
+            lights.led(1)
+            time.sleep(1)
+            lights.led((0, 0, 0))
+
+        # await lights.string(1)
 
     asyncio.run(main())

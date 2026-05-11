@@ -64,7 +64,7 @@ class Link:
     def __init__(self):
         self.lights = LED(
             np_pin=_get_int_env("DD_NEOPIXEL_PIN", 10),
-            num_np=_get_int_env("DD_NEOPIXEL_COUNT", 150),
+            num_np=_get_int_env("DD_NEOPIXEL_COUNT", 700),
         )
         self.lcd = LCD(
             i2c_bus=_get_int_env("DD_LCD_I2C_BUS", 2),
