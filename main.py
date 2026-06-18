@@ -363,6 +363,7 @@ async def run_exp(csv_file, start_at=0):
         lights.active_mode = None
         lights.xp_on = False
         player.stop()
+        c_task(default_screen(1))
         print("Experience ended, cleaning up.")
 
 

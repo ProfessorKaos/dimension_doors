@@ -23,6 +23,7 @@ class AudioPlayer:
         track_num = int(track_id)
         candidates = [
             f"{track_num}.mp3",
+	    f"{track_num}.opus",
             f"{track_num:02d}.mp3",
             f"{track_num:03d}.mp3",
             f"track_{track_num}.mp3",

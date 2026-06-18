@@ -219,9 +219,9 @@ class LED:
 
         self.np_axis = {
             "start": 1,
-            "x": 400,
-            "y": 600,
-            "end": self.num_np,
+            "x": 308,
+            "y": 470,
+            "end": 630,
         }
 
         self._flick_thread = None
